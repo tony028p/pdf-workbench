@@ -1,0 +1,13 @@
+{
+  "name": "pdf-workbench-ocr-spike",
+  "private": true,
+  "description": "M3:OCR 引擎比較原型(PaddleOCR vs tesseract.js),不屬於正式建置",
+  "dependencies": {
+    "@tesseract.js-data/chi_tra": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "onnxruntime-web": "1.30.0",
+    "pdfmarkdown-ppocrv5-models": "1.0.0",
+    "tesseract.js": "7.0.0",
+    "tesseract.js-core": "6.1.2"
+  }
+}

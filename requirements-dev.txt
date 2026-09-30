@@ -1,0 +1,17 @@
+# 測試用(pytest + Playwright);Playwright 版本需與 CI 安裝的 Chromium 相符
+playwright==1.56.0
+pytest==9.1.1
+pypdfium2==5.13.0
+pypdf==6.19.0
+reportlab==5.0.1
+pillow==12.3.0
+python-docx==1.2.0
+# 建置 OCR 版(build.py --ocr)時量化辨識模型;版本影響量化結果(build.py 會核對 SHA-256)
+onnxruntime==1.30.0
+onnx==1.23.1
+openpyxl==3.1.5
+# pypdf 產生 AES 加密的測試檔需要
+cryptography==41.0.7
+# 建置時合併內嵌的中文字型(build.py 會核對 SHA-256)
+fonttools==4.66.1
+brotli==1.2.0

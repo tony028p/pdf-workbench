@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OCR 原型 — /*__TITLE__*/</title>
+<style>
+  body { font: 14px/1.5 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; margin: 16px; color: #222; }
+  #bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  #status { color: #555; }
+  #wrap { position: relative; display: inline-block; max-width: 100%; }
+  #view { max-width: 100%; border: 1px solid #ccc; }
+  #boxes { position: absolute; inset: 0; pointer-events: none; }
+  #out { white-space: pre-wrap; background: #f6f6f6; padding: 8px; max-height: 40vh; overflow: auto; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <strong>OCR 原型:/*__TITLE__*/</strong>
+  <input type="file" id="file" accept="image/*">
+  <span id="status">尚未載入引擎</span>
+</div>
+<pre id="out"></pre>
+<div id="wrap"><canvas id="view"></canvas><svg id="boxes"></svg></div>
+
+/*__EMBEDS__*/
+<script>/*__LIBS__*/</script>
+<script>/*__ENGINE_JS__*/</script>
+<script>
+// 供手動測試與 bench.py 使用
+const ENGINE = /*__ENGINE__*/;
+const status = s => document.getElementById('status').textContent = s;
+let ready = null;
+function ensureEngine() {
+  if (!ready) {
+    const t = performance.now();
+    ready = ENGINE.init(status).then(() => { status('引擎就緒(' + Math.round(performance.now() - t) + ' ms)'); });
+  }
+  return ready;
+}
+
+// bench.py 呼叫:傳入圖片 data URL,回傳辨識結果與耗時
+async function ocrDataURL(url, opts = {}) {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.getContext('2d').drawImage(img, 0, 0);
+  await ensureEngine();
+  const timing = {};
+  const t = performance.now();
+  const r = await ENGINE.recognize(c, { ...opts, timing });
+  timing.total = performance.now() - t;
+  return { words: r.words, text: r.text, timing };
+}
+
+document.getElementById('file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const bmp = await createImageBitmap(f);
+  const view = document.getElementById('view');
+  view.width = bmp.width; view.height = bmp.height;
+  view.getContext('2d').drawImage(bmp, 0, 0);
+  await ensureEngine();
+  status('辨識中…');
+  const t = performance.now();
+  const r = await ENGINE.recognize(view, {});
+  status('完成:' + r.words.length + ' 個字詞,' + Math.round(performance.now() - t) + ' ms');
+  document.getElementById('out').textContent = r.text;
+  const svg = document.getElementById('boxes');
+  svg.setAttribute('viewBox', `0 0 ${bmp.width} ${bmp.height}`);
+  svg.innerHTML = r.words.map(w => {
+    const [x0, y0, x1, y1] = w.bbox;
+    return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="none" stroke="${w.conf < 60 ? '#e67e22' : '#2980b9'}" stroke-width="2"/>`;
+  }).join('');
+});
+</script>
+</body>
+</html>

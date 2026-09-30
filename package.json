@@ -1,0 +1,19 @@
+{
+  "name": "pdf-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "單一 HTML 檔、完全離線的 PDF 編輯工具",
+  "scripts": {
+    "build": "python3 build.py",
+    "test": "python3 -m pytest"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans-tc": "5.3.0",
+    "@pdf-lib/fontkit": "1.1.1",
+    "onnxruntime-web": "1.30.0",
+    "opencc-data": "1.4.2",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "3.11.174",
+    "pdfmarkdown-ppocrv5-models": "1.0.0"
+  }
+}

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF 工作台</title>
+<style>
+:root{
+  --ink:#1b2430; --muted:#5b6675; --line:#d3d9e2; --desk:#dde3ea; --panel:#f5f7fa; --paper:#fff;
+  --accent:#2b47d9; --accent-soft:#e3e8fd; --accent-ink:#fff; --danger:#c0392b;
+  --font:"Noto Sans TC","PingFang TC","Microsoft JhengHei","Heiti TC",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px/1.5 var(--font);color:var(--ink);background:var(--desk);overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{display:flex;flex-direction:column;height:100%}
+
+/* ---- top bar ---- */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 14px;background:var(--paper);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;font-size:16px;letter-spacing:.02em;margin-right:6px;white-space:nowrap}
+.brand small{display:block;font-weight:400;font-size:11px;color:var(--muted);letter-spacing:0}
+.grp{display:flex;align-items:center;gap:4px;padding-right:14px;border-right:1px solid var(--line)}
+.grp:last-of-type{border-right:0}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 11px;line-height:1.3;white-space:nowrap}
+.btn:hover:not(:disabled){background:var(--panel);border-color:#b9c2cf}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.primary:hover:not(:disabled){background:#2038b8;border-color:#2038b8}
+.btn.quiet{border-color:transparent;background:transparent}
+.btn[aria-pressed="true"]{background:var(--accent-soft);border-color:#b6c2f5;color:#1d33a8}
+.btn.quiet:hover:not(:disabled){background:var(--panel)}
+.zoomlbl{min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* ---- tool row ---- */
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:6px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.tool{display:flex;align-items:center;gap:5px;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 10px}
+.tool svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tool:hover{background:#e9edf3}
+.tool[aria-pressed="true"]{background:var(--accent-soft);border-color:#b6c2f5;color:#1d33a8;font-weight:600}
+.sep{width:1px;height:22px;background:var(--line);margin:0 6px}
+.prop{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.prop input[type=color]{width:30px;height:26px;padding:0;border:1px solid var(--line);border-radius:5px;background:var(--paper)}
+.prop input[type=range]{width:96px;accent-color:var(--accent)}
+.pgjump{display:flex;align-items:center;gap:4px;color:var(--muted)}
+.pgjump input{width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;text-align:center}
+.hint{color:var(--muted);font-size:12px}
+
+/* ---- body ---- */
+.body{flex:1;display:flex;min-height:0}
+#thumbs{width:256px;flex:none;overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:10px 8px}
+#thumbsGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.th{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:152px;padding:8px 4px 4px;border-radius:8px;border:2px solid transparent;cursor:pointer;user-select:none}
+.th:hover{background:#e9edf3}
+.th.sel{background:var(--accent-soft);border-color:#9fb0f3}
+.th.cur .num{color:var(--accent);font-weight:700}
+.th.dragging{opacity:.35}
+.th.drop-before::before,.th.drop-after::after{content:"";position:absolute;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--accent)}
+.th.drop-before::before{left:-4px}
+.th.drop-after::after{right:-4px}
+.thbox{position:relative;flex:none;margin:auto 0;box-shadow:0 1px 2px rgba(20,30,50,.25),0 3px 8px rgba(20,30,50,.12);background:#fff}
+.thin{position:absolute;left:50%;top:50%}
+.thin canvas{display:block;width:100%;height:100%;background:#fff}
+.num{font-size:12px;color:var(--muted);margin-top:4px}
+.th .dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);display:none}
+.th.has-ann .dot{display:block}
+
+#stage{flex:1;overflow:auto;position:relative}
+#pages{position:relative;padding:22px 32px 60px;display:flex;flex-direction:column;align-items:center;gap:22px;min-width:min-content}
+.pv{position:relative;flex:none}
+.pvin{position:absolute;left:50%;top:50%;background:#fff;box-shadow:0 1px 2px rgba(20,30,50,.3),0 6px 22px rgba(20,30,50,.18)}
+.pvin canvas{display:block;width:100%;height:100%}
+.pvin svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;touch-action:none}
+.tv{pointer-events:all}.tv.pdf{fill:rgba(43,120,255,.13);stroke:rgba(43,90,230,.7)}.tv.ocr{fill:rgba(20,170,90,.14);stroke:rgba(20,140,70,.75)}.tv.bad{fill:rgba(220,40,40,.16);stroke:rgba(200,30,30,.8)}
+/* 觸控:選取、選取文字、填寫表單時手指可以捲動與縮放頁面(按在標註上時由 pointer.js 擋下捲動);繪圖工具維持手指直接畫 */
+#pages[data-tool="select"] .pvin svg,#pages[data-tool="seltext"] .pvin svg,#pages[data-tool="form"] .pvin svg{touch-action:pan-x pan-y pinch-zoom}
+.th{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.pvlabel{position:absolute;left:-30px;top:0;width:24px;text-align:right;font-size:12px;color:var(--muted)}
+#pages[data-tool="select"] .pv{cursor:default}
+#pages[data-tool="text"] .pv,#pages[data-tool="seltext"] .pv,#pages[data-tool="retext"] .pv{cursor:text}
+#pages:not([data-tool="select"]):not([data-tool="text"]):not([data-tool="seltext"]):not([data-tool="retext"]):not([data-tool="form"]) .pv{cursor:crosshair}
+.fl{position:absolute;inset:0;z-index:3}
+.fl .ff{position:absolute;box-sizing:border-box;margin:0;padding:0 2px;border:1px solid rgba(43,71,217,.45);background:#e8eeff;color:#111;
+  font-family:inherit;line-height:1.15;border-radius:2px;resize:none}
+.fl .ff:focus{outline:2px solid var(--accent,#2b47d9);background:#fff}
+.fl .ff:disabled{background:rgba(232,238,255,.55);color:#555}
+.fl input.ff-check,.fl input.ff-radio{accent-color:var(--accent,#2b47d9);cursor:pointer}
+.fl textarea.ff{padding:1px 2px}
+.tl{position:absolute;inset:0;overflow:hidden;line-height:1;z-index:2}
+.tl span{position:absolute;white-space:pre;color:transparent;transform-origin:0 0;cursor:text;z-index:1}
+.tl .eoc{display:none;position:absolute;inset:0;z-index:0;cursor:text}
+.tl.selecting .eoc{display:block}
+.tl span::selection{background:rgba(43,71,217,.32)}
+
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:30px}
+.dropzone{max-width:560px;width:100%;text-align:center;padding:44px 34px;border:2px dashed #9aa6b8;border-radius:14px;background:rgba(255,255,255,.55)}
+.dropzone h1{font-size:24px;margin:0 0 10px;letter-spacing:.01em}
+.dropzone p{margin:0 0 22px;color:var(--muted)}
+.dropzone .btn.primary{padding:9px 22px;font-size:15px}
+#dropveil{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(43,71,217,.14);border:3px dashed var(--accent);font-size:22px;font-weight:700;color:#1d33a8;z-index:50;pointer-events:none}
+body.filedrag #dropveil{display:flex}
+
+/* ---- dialogs ---- */
+dialog{border:0;border-radius:12px;padding:0;box-shadow:0 20px 60px rgba(10,20,40,.35);color:var(--ink);background:var(--paper);max-width:min(94vw,560px);width:100%}
+dialog::backdrop{background:rgba(20,28,40,.45)}
+.dhead{padding:16px 20px 4px;font-size:17px;font-weight:700}
+.dbody{padding:8px 20px 6px}
+.dfoot{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px 18px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:10px 0}
+.row>label{display:flex;align-items:center;gap:6px}
+.field{display:flex;flex-direction:column;gap:4px;margin:10px 0}
+.field>span,.lbl{font-size:12px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{border:1px solid var(--line);border-radius:6px;padding:6px 9px;background:var(--paper);min-width:0}
+textarea{width:100%;resize:vertical}
+input[type=number]{width:84px}
+.radios{display:flex;flex-direction:column;gap:6px;margin:6px 0 12px}
+.radios label{display:flex;align-items:center;gap:8px}
+.sect{margin:14px 0 4px;font-weight:600}
+.note{font-size:12px;color:var(--muted);margin:4px 0}
+#sigpad{display:block;width:100%;height:190px;border:1px dashed #9aa6b8;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair}
+.subgrp[hidden]{display:none}
+#dlgExtract{max-width:min(94vw,760px)}
+#ocrBar{width:100%;height:10px;margin:10px 0 2px}
+#umList .umsrc{font-weight:700;margin:8px 0 2px}
+#umList label{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
+#umList small{display:block;color:var(--muted)}
+#exText{height:46vh;min-height:160px;font-size:14px;line-height:1.6;white-space:pre-wrap}
+#exNotes:empty{display:none}
+#exNotes{color:#8a5a00}
+
+#busy{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,28,40,.5);z-index:100}
+#busy.on{display:flex}
+#busy .card{background:var(--paper);padding:20px 28px;border-radius:12px;min-width:240px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.spin{width:26px;height:26px;margin:0 auto 10px;border:3px solid #cfd6e6;border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1b2430;color:#fff;padding:9px 16px;border-radius:8px;max-width:88vw;opacity:0;pointer-events:none;transition:opacity .2s;z-index:120}
+#toast.on{opacity:1}
+
+@media (max-width:760px){
+  #thumbs{width:132px}
+  #thumbsGrid{grid-template-columns:1fr}
+  .brand small{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand">PDF 工作台<small>檔案只在這個瀏覽器內處理,不會上傳</small></div>
+    <div class="grp">
+      <button class="btn" id="btnAdd" title="可一次選多個 PDF 或圖片,會依序合併">加入檔案</button>
+      <button class="btn quiet" id="btnClear">清空</button>
+    </div>
+    <div class="grp">
+      <button class="btn quiet" id="btnUndo" title="復原 (Ctrl+Z)">復原</button>
+      <button class="btn quiet" id="btnRedo" title="重做 (Ctrl+Y)">重做</button>
+    </div>
+    <div class="grp" id="pageOps" title="作用於左側選取的頁面;沒有選取時作用於目前頁面">
+      <button class="btn quiet" data-op="rotL">左轉</button>
+      <button class="btn quiet" data-op="rotR">右轉</button>
+      <button class="btn quiet" data-op="dup">複製</button>
+      <button class="btn quiet" data-op="up">前移</button>
+      <button class="btn quiet" data-op="down">後移</button>
+      <button class="btn quiet" data-op="del">刪除頁面</button>
+    </div>
+    <div class="grp">
+      <button class="btn quiet" id="zOut" title="縮小">−</button>
+      <span class="zoomlbl" id="zLbl">100%</span>
+      <button class="btn quiet" id="zIn" title="放大">+</button>
+      <button class="btn quiet" id="zFit">符合寬度</button>
+      <button class="btn quiet" id="btnTextView" aria-pressed="false" title="在頁面上框出可以選取、搜尋的文字(藍:PDF 的文字、綠:文字辨識結果、紅:疑似亂碼),滑鼠停在框上可以看內容">顯示文字層</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnOcr" title="辨識掃描檔或圖片裡的文字(在這台電腦上執行,不會上傳)">文字辨識</button>
+    <button class="btn" id="btnExtract" title="擷取整份或選取頁面的文字,可複製或存成 TXT">擷取文字</button>
+    <button class="btn" id="btnMark">浮水印與頁碼</button>
+    <button class="btn primary" id="btnExport">匯出</button>
+  </header>
+
+  <div class="tools" id="tools">
+    <button class="tool" data-tool="select" aria-pressed="true" title="選取、移動、縮放;雙擊文字可編輯;Delete 刪除">
+      <svg viewBox="0 0 20 20"><path d="M5 3l11 7-4.8 1.4L9.6 16z"/></svg>選取</button>
+    <button class="tool" data-tool="seltext" aria-pressed="false" title="拖曳選取頁面上的文字,Ctrl+C 複製">
+      <svg viewBox="0 0 20 20"><path d="M3 5h8M7 5v10M4.5 15h5"/><path d="M14 4v12M12.5 4h3M12.5 16h3"/></svg>選取文字</button>
+    <button class="tool" data-tool="form" aria-pressed="false" title="填寫 PDF 裡的表單欄位(文字框、勾選框、選單)">
+      <svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="5" rx="1"/><rect x="3" y="12" width="4" height="4" rx=".8"/><path d="M4 14l1 1 2-2.5"/><path d="M9.5 14h7"/></svg>填寫表單</button>
+    <button class="tool" data-tool="text" aria-pressed="false" title="點頁面加入文字(支援中文)">
+      <svg viewBox="0 0 20 20"><path d="M5 5h10M10 5v11M7.5 16h5"/></svg>文字</button>
+    <button class="tool" data-tool="retext" aria-pressed="false" title="點頁面上原有的文字,改成新的內容(原文字匯出時從檔案刪除)">
+      <svg viewBox="0 0 20 20"><path d="M3 5h8M7 5v10M5 15h4"/><path d="M11 17l.8-2.8 5-5 2 2-5 5z"/></svg>改字</button>
+    <button class="tool" data-tool="image" aria-pressed="false" title="選一張圖片,再點頁面放置">
+      <svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.5"/><circle cx="7.5" cy="8.5" r="1.3"/><path d="M4 15l4-4 3 3 2-2 3 3"/></svg>圖片</button>
+    <button class="tool" data-tool="sign" aria-pressed="false" title="手寫或上傳簽名,再點頁面放置">
+      <svg viewBox="0 0 20 20"><path d="M3 13c2-6 4-8 5-6s-2 6 0 6 3-4 4-4 0 4 2 4 2-1 3-2"/><path d="M3 17h14"/></svg>簽名</button>
+    <span class="sep"></span>
+    <button class="tool" data-tool="pen" aria-pressed="false" title="自由手繪">
+      <svg viewBox="0 0 20 20"><path d="M4 16l1-4 8-8 3 3-8 8z"/><path d="M11.5 5.5l3 3"/></svg>畫筆</button>
+    <button class="tool" data-tool="line" aria-pressed="false" title="拖曳畫直線(按住 Shift 鎖定角度)">
+      <svg viewBox="0 0 20 20"><path d="M4 16L16 4"/></svg>直線</button>
+    <button class="tool" data-tool="hl" aria-pressed="false" title="拖曳框選,加上螢光標示">
+      <svg viewBox="0 0 20 20"><path d="M6 12l6-6 3 3-6 6H6z"/><path d="M4 17h12"/></svg>螢光筆</button>
+    <button class="tool" data-tool="redact" aria-pressed="false" title="拖曳框選,遮蓋敏感內容">
+      <svg viewBox="0 0 20 20"><rect x="3" y="7" width="14" height="6" fill="currentColor"/></svg>塗黑</button>
+    <button class="tool" data-tool="crop" aria-pressed="false" title="拖曳框選要保留的範圍,匯出時只顯示這個範圍">
+      <svg viewBox="0 0 20 20"><path d="M6 2v12h12"/><path d="M2 6h12v12"/></svg>裁切</button>
+    <span class="sep"></span>
+    <label class="prop" id="propColor">顏色 <input type="color" id="colorIn" value="#d62839"></label>
+    <label class="prop" id="propWidth">粗細 <input type="range" id="widthIn" min="1" max="24" value="3"><span id="widthLbl">3</span></label>
+    <button class="btn" id="propCropAll" style="display:none" title="把這個裁切範圍套用到每一頁(取代原本的裁切)">套用到所有頁面</button>
+    <span class="hint" id="toolHint"></span>
+    <div class="spacer"></div>
+    <div class="pgjump">第 <input type="number" id="pgIn" min="1" value="1"> / <span id="pgTot">0</span> 頁</div>
+  </div>
+
+  <div class="body">
+    <aside id="thumbs" aria-label="頁面縮圖">
+      <div id="thumbsGrid"></div>
+    </aside>
+    <main id="stage">
+      <div id="pages" data-tool="select"></div>
+      <div id="empty">
+        <div class="dropzone">
+          <h1>把 PDF 或圖片拖進來</h1>
+          <p>合併、排序、旋轉、刪除頁面,加文字、圖片與簽名,畫線、螢光筆、塗黑,加浮水印與頁碼,匯出成 PDF 或圖片。全部在這個瀏覽器分頁內完成,不會上傳任何資料。</p>
+          <button class="btn primary" id="btnPick">選擇檔案</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div id="dropveil">放開以加入檔案</div>
+<input type="file" id="fileIn" accept=".pdf,application/pdf,image/*" multiple hidden>
+<input type="file" id="imgIn" accept="image/*" hidden>
+<input type="file" id="sigFileIn" accept="image/*" hidden>
+
+<!-- text dialog -->
+<dialog id="dlgText">
+  <div class="dhead" id="dlgTextTitle">加入文字</div>
+  <div class="dbody">
+    <textarea id="txtIn" rows="3" placeholder="輸入文字,可換行"></textarea>
+    <div class="row">
+      <label>字型
+        <select id="txtFont"><option value="sans">黑體</option><option value="serif">明體</option><option value="kai">楷體</option></select></label>
+      <label>大小 <input type="number" id="txtSize" min="6" max="200" value="16"> pt</label>
+      <label><input type="checkbox" id="txtBold"> 粗體</label>
+      <label>顏色 <input type="color" id="txtColor" value="#111111"></label>
+    </div>
+    <div class="note">「黑體」會用內嵌的思源黑體寫成真正的文字,匯出後可以選取、搜尋;明體、楷體與字型裡沒有的罕用字,以圖片嵌入(任何電腦都能正確顯示,但無法選取)。</div>
+  </div>
+  <div class="dfoot"><button class="btn" id="txtCancel">取消</button><button class="btn primary" id="txtOk">確定</button></div>
+</dialog>
+
+<!-- signature dialog -->
+<dialog id="dlgSign">
+  <div class="dhead">簽名</div>
+  <div class="dbody">
+    <canvas id="sigpad"></canvas>
+    <div class="row">
+      <span class="lbl">墨色</span>
+      <label><input type="radio" name="sigink" value="#111111" checked> 黑</label>
+      <label><input type="radio" name="sigink" value="#1b3fbf"> 藍</label>
+      <label><input type="radio" name="sigink" value="#c0182b"> 紅</label>
+      <span class="spacer"></span>
+      <button class="btn quiet" id="sigClear">清除</button>
+      <button class="btn" id="sigUpload">改用圖片檔</button>
+      <button class="btn" id="sigReuse" hidden>用上次的簽名</button>
+    </div>
+    <div class="note">用滑鼠、觸控板或觸控筆簽名。確定後,點一下頁面即可放置,放好後可拖曳或縮放。</div>
+  </div>
+  <div class="dfoot"><button class="btn" id="sigCancel">取消</button><button class="btn primary" id="sigOk">確定</button></div>
+</dialog>
+
+<!-- watermark & page number dialog -->
+<dialog id="dlgMark">
+  <div class="dhead">浮水印與頁碼</div>
+  <div class="dbody">
+    <label class="sect"><input type="checkbox" id="wmOn"> 文字浮水印</label>
+    <div class="subgrp" id="wmSub">
+      <div class="field"><span>浮水印文字</span><input type="text" id="wmText" value="機密"></div>
+      <div class="row">
+        <label>大小 <input type="number" id="wmSize" min="8" max="300" value="72"> pt</label>
+        <label>顏色 <input type="color" id="wmColor" value="#888888"></label>
+        <label>透明度 <input type="range" id="wmOpacity" min="5" max="100" value="25"></label>
+      </div>
+      <div class="row">
+        <label>角度 <select id="wmAngle"><option value="0">水平</option><option value="-45" selected>斜向 45°</option><option value="45">反向斜 45°</option><option value="-90">直向</option></select></label>
+        <label><input type="checkbox" id="wmTile"> 重複平鋪</label>
+      </div>
+    </div>
+    <label class="sect"><input type="checkbox" id="pnOn"> 頁碼</label>
+    <div class="subgrp" id="pnSub">
+      <div class="row">
+        <label>格式
+          <select id="pnFmt">
+            <option value="{n}">1</option>
+            <option value="{n} / {total}" selected>1 / 10</option>
+            <option value="- {n} -">- 1 -</option>
+            <option value="第 {n} 頁">第 1 頁</option>
+            <option value="第 {n} 頁,共 {total} 頁">第 1 頁,共 10 頁</option>
+          </select></label>
+        <label>位置
+          <select id="pnPos">
+            <option value="bc" selected>下方置中</option><option value="br">右下</option><option value="bl">左下</option>
+            <option value="tc">上方置中</option><option value="tr">右上</option><option value="tl">左上</option>
+          </select></label>
+      </div>
+      <div class="row">
+        <label>大小 <input type="number" id="pnSize" min="6" max="40" value="11"> pt</label>
+        <label>顏色 <input type="color" id="pnColor" value="#333333"></label>
+        <label>邊距 <input type="number" id="pnMargin" min="0" max="120" value="28"> pt</label>
+        <label>起始頁碼 <input type="number" id="pnStart" min="0" max="9999" value="1"></label>
+      </div>
+    </div>
+    <div class="note">設定會即時顯示在頁面上,並在匯出時套用到所有頁面。頁碼依目前的頁面順序計算。</div>
+    <div class="sect">PDF 原有的浮水印</div>
+    <div class="row"><button class="btn" id="btnUnmark">偵測並移除原有的浮水印…</button></div>
+  </div>
+  <div class="dfoot"><button class="btn primary" id="markOk">完成</button></div>
+</dialog>
+
+<!-- password dialog -->
+<dialog id="dlgPassword">
+  <div class="dhead">輸入密碼</div>
+  <div class="dbody">
+    <div class="note">「<span id="pwName"></span>」有密碼保護。密碼只在這個分頁中用來解開檔案,不會傳送到任何地方;匯出的檔案不再加密(可在匯出時另外設定密碼)。</div>
+    <div class="field"><span>密碼</span><input type="password" id="pwIn" autocomplete="off"></div>
+    <div class="note" id="pwErr" style="color:var(--danger)"></div>
+  </div>
+  <div class="dfoot"><button class="btn" id="pwCancel">取消</button><button class="btn primary" id="pwOk">開啟</button></div>
+</dialog>
+
+<!-- remove existing watermark dialog -->
+<dialog id="dlgUnmark">
+  <div class="dhead">移除原有的浮水印</div>
+  <div class="dbody">
+    <div id="umList"></div>
+    <div class="note" id="umStatus"></div>
+    <div class="note">勾選要移除的項目後按「套用」:編輯畫面立即更新,匯出時真正從檔案刪除(不是蓋白框)。想恢復就取消勾選再套用。印在掃描影像裡的浮水印無法移除。請只用在你有權處理的文件上。</div>
+  </div>
+  <div class="dfoot"><button class="btn" id="umClose">關閉</button><button class="btn primary" id="umApply">套用</button></div>
+</dialog>
+
+<!-- extract text dialog -->
+<dialog id="dlgExtract">
+  <div class="dhead">擷取文字</div>
+  <div class="dbody">
+    <div class="row">
+      <label><input type="radio" name="exScope" value="all" checked> 全部頁面(<span id="exAllN">0</span> 頁)</label>
+      <label><input type="radio" name="exScope" value="sel"> 左側選取的頁面(<span id="exSelN">0</span> 頁)</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="exSep" checked> 加上頁碼分隔</label>
+      <label><input type="checkbox" id="exAnns" checked> 包含自己加入的文字</label>
+    </div>
+    <textarea id="exText" readonly placeholder="(沒有可擷取的文字)"></textarea>
+    <div class="note" id="exStatus"></div>
+    <div class="note" id="exNotes"></div>
+    <div class="note">依版面分析排出閱讀順序(支援多欄);表格、直書的順序可能不完全正確。</div>
+  </div>
+  <div class="dfoot"><button class="btn" id="exClose">關閉</button><button class="btn" id="exSave">下載 TXT</button><button class="btn primary" id="exCopy">複製全部</button></div>
+</dialog>
+
+<!-- OCR dialog -->
+<dialog id="dlgOcr">
+  <div class="dhead">文字辨識(OCR)</div>
+  <div class="dbody">
+    <div class="radios">
+      <label><input type="radio" name="ocrScope" value="auto" checked> 自動:只處理沒有文字的頁面(<span id="ocrAutoN">0</span> 頁)</label>
+      <label><input type="radio" name="ocrScope" value="all"> 全部頁面(<span id="ocrAllN">0</span> 頁)</label>
+      <label><input type="radio" name="ocrScope" value="sel"> 左側選取的頁面(<span id="ocrSelN">0</span> 頁)</label>
+    </div>
+    <div id="ocrPackBox" hidden>
+      <div class="note">這個精簡版沒有內建文字辨識。請選擇和這個版本一起發佈的 <b>OCR 套件檔</b>(pdf-workbench-ocr-pack.bin,約 17 MB),載入後就能辨識;檔案只在這台電腦上讀取,不會上傳。也可以改用完整版(pdf-workbench-ocr.html)。</div>
+      <div class="row"><button class="btn" id="ocrPackBtn">選擇 OCR 套件…</button></div>
+      <input type="file" id="ocrPackIn" accept=".bin" hidden>
+      <div class="note" id="ocrPackErr" style="color:var(--danger)"></div>
+    </div>
+    <label class="row"><input type="checkbox" id="ocrMarkLow" checked> 在頁面上用橘色框標出信心較低(低於 85%)的字詞,方便核對(只在畫面上顯示,不會匯出)</label>
+    <label class="row"><input type="checkbox" id="ocrS2T" checked> 辨識出的簡體字轉成繁體(台灣用字;「后、里、台」等繁體也用的字不變)</label>
+    <progress id="ocrBar" max="1" value="0" hidden></progress>
+    <div class="note" id="ocrStatus"></div>
+    <div class="note">在這台電腦上辨識,不會上傳;每頁約數秒。已有文字的頁面辨識後,會改用辨識結果。辨識出的文字可以用「選取文字」「擷取文字」與匯出 Word/Markdown/HTML。</div>
+  </div>
+  <div class="dfoot"><button class="btn" id="ocrClose">關閉</button><button class="btn primary" id="ocrStart">開始辨識</button></div>
+</dialog>
+
+<!-- export dialog -->
+<dialog id="dlgExport">
+  <div class="dhead">匯出</div>
+  <div class="dbody">
+    <div class="sect" style="margin-top:6px">格式</div>
+    <div class="radios">
+      <label><input type="radio" name="xfmt" value="pdf" checked> PDF</label>
+      <label><input type="radio" name="xfmt" value="png"> PNG 圖片(每頁一張)</label>
+      <label><input type="radio" name="xfmt" value="jpg"> JPG 圖片(每頁一張)</label>
+      <label><input type="radio" name="xfmt" value="docx"> Word(.docx)</label>
+      <label><input type="radio" name="xfmt" value="md"> Markdown(.md)</label>
+      <label><input type="radio" name="xfmt" value="html"> HTML 網頁(.html)</label>
+      <label><input type="radio" name="xfmt" value="xlsx"> Excel(.xlsx):只匯出表格</label>
+    </div>
+    <div class="sect">範圍</div>
+    <div class="radios" id="xScope">
+      <label><input type="radio" name="xscope" value="all" checked> 全部頁面(<span id="xAllN">0</span> 頁)</label>
+      <label><input type="radio" name="xscope" value="sel"> 只匯出左側選取的頁面(<span id="xSelN">0</span> 頁)</label>
+    </div>
+    <div class="subgrp" id="xPdfOpt">
+      <div class="field"><span>輸出方式</span>
+        <select id="xMode">
+          <option value="single">合併成單一 PDF</option>
+          <option value="each">每頁拆成一個 PDF(打包成 ZIP)</option>
+          <option value="range">依頁碼範圍拆分(打包成 ZIP)</option>
+        </select></div>
+      <div class="field" id="xRangeF" hidden><span>頁碼範圍:以逗號分隔,每一段輸出成一個檔案,例如 1-3, 5, 8-10(依目前頁面順序)</span>
+        <input type="text" id="xRange" placeholder="1-3, 5, 8-10"></div>
+      <label class="row"><input type="checkbox" id="xFlat" checked> 有塗黑的頁面轉成影像,徹底移除底下的文字(建議)</label>
+      <label class="row" id="xOcrLayerL"><input type="checkbox" id="xOcrLayer" checked> 辨識過的掃描頁加上隱形文字層(可搜尋、選取、複製)</label>
+      <label class="row"><input type="checkbox" id="xFormFlat"> 表單欄位轉成一般內容(填好的值留在頁面上,不能再修改)</label>
+      <div class="field"><span>壓縮圖片(縮小解析度超過需要的圖片,文字與向量圖不變)</span>
+        <select id="xCompress">
+          <option value="none">不壓縮</option>
+          <option value="high">高品質(圖片最多 220 dpi)</option>
+          <option value="std">標準(150 dpi,適合 email 傳送)</option>
+          <option value="small">最小(96 dpi,適合螢幕閱讀)</option>
+        </select></div>
+      <label class="row"><input type="checkbox" id="xPw"> 加上密碼(AES-256 加密)</label>
+      <div id="xPwF" hidden>
+        <div class="field"><span>開啟密碼</span><input type="password" id="xPw1" autocomplete="new-password"></div>
+        <div class="field"><span>再輸入一次</span><input type="password" id="xPw2" autocomplete="new-password"></div>
+        <div class="field"><span>擁有者密碼(選填,設定後才能限制權限;要和開啟密碼不同)</span><input type="password" id="xPwOwner" autocomplete="new-password"></div>
+        <label class="row"><input type="checkbox" id="xAllowPrint" checked> 允許列印</label>
+        <label class="row"><input type="checkbox" id="xAllowCopy" checked> 允許複製內容</label>
+        <label class="row"><input type="checkbox" id="xAllowModify" checked> 允許修改(含註解、填寫表單、組合頁面)</label>
+        <div class="note">密碼只用在這次匯出,不會保存或傳送。忘記開啟密碼就無法再開啟檔案,請妥善保管。權限限制要靠閱讀程式遵守,不能防止有心人破解。</div>
+        <div class="note" id="xPwErr" style="color:var(--danger)"></div>
+      </div>
+    </div>
+    <div class="subgrp" id="xDocOpt" hidden>
+      <div class="field"><span>轉換方式</span>
+        <select id="xDocMode">
+          <option value="edit">可編輯:重排成段落,保留標題、粗體、字級與圖片</option>
+          <option value="image">保留外觀:每頁一張圖(外觀一致,文字不能編輯)</option>
+        </select></div>
+      <label class="row" id="xDocBreakL"><input type="checkbox" id="xDocBreak" checked> 每一頁 PDF 從 Word 的新頁面開始</label>
+      <div class="note">塗黑範圍一律排除。表格、多欄混排、直書只能近似;需要外觀完全一致請選「保留外觀」。</div>
+    </div>
+    <div class="subgrp" id="xXlsxOpt" hidden>
+      <div class="note">每個偵測到的表格一個工作表(名稱如「第 3 頁」)。數字(千分位、小數、百分比、負數、貨幣)存成真正的數值並保留原本的顯示格式,可以直接計算;合併儲存格、粗體、底色一併保留。塗黑範圍一律排除。掃描檔請先用「文字辨識」。</div>
+    </div>
+    <div class="subgrp" id="xTextOpt" hidden>
+      <label class="row"><input type="checkbox" id="xPageSep" checked> 頁與頁之間加分隔線</label>
+      <div class="note">重排成段落、標題、清單並保留粗體/斜體;塗黑範圍一律排除。Markdown 有圖片時會打包成 ZIP(.md + images 資料夾);HTML 是單一檔案,圖片內嵌。</div>
+    </div>
+    <div class="subgrp" id="xImgOpt" hidden>
+      <div class="field"><span>解析度</span>
+        <select id="xDpi"><option value="100">標準 100 dpi</option><option value="150" selected>清晰 150 dpi</option><option value="220">高 220 dpi</option><option value="300">超高 300 dpi</option></select></div>
+    </div>
+  </div>
+  <div class="dfoot"><button class="btn" id="xCancel">取消</button><button class="btn primary" id="xOk">開始匯出</button></div>
+</dialog>
+
+<div id="busy"><div class="card"><div class="spin"></div><div id="busyMsg">處理中…</div></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>/*__PDFLIB__*/</script>
+<script>/*__PDFJS__*/</script>
+<script>/*__WORKER__*/</script>
+<script>/*__CMAPS__*/</script>
+/*__FONT__*/
+/*__OCR__*/
+<script>/*__APP__*/</script>
+</body>
+</html>
