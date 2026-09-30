@@ -70,7 +70,8 @@ async function retextStyle(e, fontName) {
   } catch (_) { return {}; }
 }
 
-/* 從畫面上的頁面圖取色:底色 = 框外一圈最常見的顏色,字色 = 框內和底色差最多的像素 */
+/* 從畫面上的頁面圖取色:底色 = 框內最常見的顏色(文字筆畫通常只佔兩三成;剛好包住文字的螢光底也保留),
+   框內沒有明顯的主色時用框外一圈最常見的顏色;字色 = 框內和底色差最多的像素 */
 function retextColors(e, box) {
   const def = { bg: '#ffffff', fg: '#111111' }, v = pvMap.get(e.uid), c = v && v.canvas;
   if (!c || c.width < 2) return def;
@@ -80,15 +81,15 @@ function retextColors(e, box) {
   if (X1 - X0 < 3 || Y1 - Y0 < 3) return def;
   let d;
   try { d = c.getContext('2d').getImageData(X0, Y0, X1 - X0, Y1 - Y0).data; } catch (_) { return def; }
-  const W = X1 - X0, ring = new Map(), inner = [];
+  const W = X1 - X0, ring = new Map(), inBuckets = new Map(), inner = [];
+  const add = (m, px) => { const key = (px[0] >> 4) << 8 | (px[1] >> 4) << 4 | px[2] >> 4, s = m.get(key) || [0, 0, 0, 0]; s[0] += px[0]; s[1] += px[1]; s[2] += px[2]; s[3]++; m.set(key, s); };
   for (let y = 0; y < Y1 - Y0; y++) for (let x = 0; x < W; x++) {
     const o = (y * W + x) * 4, px = [d[o], d[o + 1], d[o + 2]];
     const bx = (X0 + x + 0.5) / k, by = (Y0 + y + 0.5) / k;
-    if (bx >= box.x0 && bx <= box.x1 && by >= box.y0 && by <= box.y1) { inner.push(px); continue; }
-    const key = (px[0] >> 4) << 8 | (px[1] >> 4) << 4 | px[2] >> 4, s = ring.get(key) || [0, 0, 0, 0];
-    s[0] += px[0]; s[1] += px[1]; s[2] += px[2]; s[3]++; ring.set(key, s);
+    if (bx >= box.x0 && bx <= box.x1 && by >= box.y0 && by <= box.y1) { inner.push(px); add(inBuckets, px); } else add(ring, px);
   }
-  const top = [...ring.values()].sort((a, b) => b[3] - a[3])[0];
+  const most = m => [...m.values()].sort((a, b) => b[3] - a[3])[0];
+  const inTop = most(inBuckets), top = inTop && inTop[3] >= inner.length * 0.4 ? inTop : most(ring);
   if (!top || !inner.length) return def;
   const bg = [top[0] / top[3], top[1] / top[3], top[2] / top[3]];
   const dist = p => Math.hypot(p[0] - bg[0], p[1] - bg[1], p[2] - bg[2]);

@@ -233,3 +233,17 @@ def test_hover_outlines_text(rt):
     rt.page.wait_for_function("document.querySelectorAll('#pages .pv .gs rect').length === 1")
     rt.page.mouse.move(pt[0] + 3, pt[1] + 400)      # 移到沒有文字的地方,框消失
     rt.page.wait_for_function("document.querySelectorAll('#pages .pv .gs rect').length === 0")
+
+
+def test_tight_highlight_keeps_background(app, tmp_path):
+    # 文字自己的螢光底剛好包住文字:底色取框內最多的顏色(文字筆畫只佔一小部分)
+    from fixtures import tight_highlight_pdf
+    app.load(tight_highlight_pdf(tmp_path / 'tight.pdf'))
+    app.tool('retext')
+    app.click_on_page(0, at(110, 707))
+    assert answer(app, 'Rate 70.2%') == 'Rate 67.8%'
+    erase, text = app.state()[0]['anns']
+    bg = [int(erase['color'][i:i + 2], 16) for i in (1, 3, 5)]
+    fg = [int(text['color'][i:i + 2], 16) for i in (1, 3, 5)]
+    assert bg[0] > 230 and bg[1] > 210 and bg[2] < 140, erase['color']
+    assert max(fg) < 80, text['color']

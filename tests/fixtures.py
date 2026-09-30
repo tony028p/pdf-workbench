@@ -765,3 +765,14 @@ def radical_pdf(path):
     with open(path, 'wb') as f:
         w.write(f)
     return path
+
+
+def tight_highlight_pdf(path):
+    """螢光標示剛好包住文字(Word/LibreOffice 的文字醒目提示):改字的底色要是黃色,不是框外的白色。"""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    c = canvas.Canvas(str(path), pagesize=letter)
+    w = stringWidth('Rate 67.8%', 'Helvetica', 20)
+    c.setFillColorRGB(1, 0.95, 0.35); c.rect(72, 700 - 4, w, 18, stroke=0, fill=1)
+    c.setFillColorRGB(0, 0, 0); c.setFont('Helvetica', 20); c.drawString(72, 700, 'Rate 67.8%')
+    c.showPage(); c.save()
+    return path
