@@ -30,6 +30,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # 套件伺服器偶爾下載到一半停住(曾卡 11 分鐘導致整個工作逾時):30 秒沒有資料就中斷重試,最多 5 次
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-retries
           npm ci
           pip install -r requirements-dev.txt
           python -m playwright install --with-deps chromium
