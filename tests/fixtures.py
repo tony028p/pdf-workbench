@@ -745,3 +745,23 @@ def garbled_pdf(path):
     with open(path, 'wb') as f:
         w.write(f)
     return path
+
+
+def radical_pdf(path):
+    """ToUnicode 把字對到外觀相同的部首字元(Chrome 等用 Noto CJK 輸出 PDF 時常見):
+    A→⽂(U+2F42 康熙部首)、B→⺠(U+2EA0 部首補充)、C→⼀(U+2F00)、D→字、E→國。"""
+    from pypdf.generic import DecodedStreamObject
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setFont('Helvetica', 20); c.drawString(72, 700, 'ADBEC')
+    c.showPage(); c.save()
+    w = PdfWriter(clone_from=PdfReader(str(path)))
+    cmap = DecodedStreamObject()
+    cmap.set_data(b'/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /RAD def '
+                  b'1 begincodespacerange <00> <FF> endcodespacerange '
+                  b'5 beginbfchar <41> <2F42> <42> <2EA0> <43> <2F00> <44> <5B57> <45> <570B> endbfchar '
+                  b'endcmap CMapName currentdict /CMap defineresource pop end end')
+    for font in w.pages[0]['/Resources']['/Font'].values():
+        font.get_object()[NameObject('/ToUnicode')] = w._add_object(cmap)
+    with open(path, 'wb') as f:
+        w.write(f)
+    return path

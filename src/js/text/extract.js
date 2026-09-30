@@ -26,6 +26,13 @@ function symbolMapper(fontName) {
   return s => s.replace(/[\uF020-\uF0FF]/g, ch => hit[1][String.fromCharCode(ch.charCodeAt(0) - 0xF000)] || ch);
 }
 
+/* 外觀相同的部首字元:Chrome 等用 Noto CJK 字型輸出 PDF 時,字型的 cmap 把「文、一、民、長」等同一個字形
+   也對到康熙部首(U+2F00–2FD5)或部首補充(U+2E80–2EF3),ToUnicode 常選到部首,擷取出來看起來一樣卻搜尋不到。
+   康熙部首用 NFKC 換回一般的字;部首補充沒有標準的正規化,依 Noto Sans CJK TC 裡共用同一個字形的字對照 */
+const RADICAL_SUP = new Map(Array.from('⺂⺃⺅⺉⺏⺐⺒⺓⺔⺖⺘⺙⺞⺟⺠⺡⺣⺤⺦⺨⺭⺯⺰⺱⺹⺺⺿⻂⻅⻈⻉⻋⻎⻐⻑⻒⻓⻔⻖⻙⻚⻛⻜⻠⻢⻥⻦⻧⻨⻩⻪⻫⻬⻮⻰⻲')
+  .map((c, i) => [c, '乛乚亻刂尣尢巳幺彑忄扌攵歺母民氵灬爫丬犭礻糹纟罓耂肀艹衤见讠贝车辶钅長镸长门阝韦页风飞饣马鱼鸟卤麦黄黾斉齐齿龙亀'[i]]));
+const fixRadicals = s => s.replace(/[\u2E80-\u2FDF]/g, c => c >= '\u2F00' ? c.normalize('NFKC') : RADICAL_SUP.get(c) || c);
+
 /* 頁面文字:辨識過的頁面以 OCR 結果為準(ocr/ocr.js),否則是 PDF 本身的文字層 */
 async function rawPageText(e) {
   return ocrCache.get(e.src + ':' + e.idx) || pdfRawPageText(e);
@@ -56,6 +63,7 @@ async function pdfRawPageText(e) {
   const items = [];
   for (const it of tc.items) {
     if (!it.str) continue;
+    it.str = fixRadicals(it.str);
     const t = pdfjsLib.Util.transform(vp.transform, it.transform);
     const size = Math.hypot(t[2], t[3]), len = Math.hypot(t[0], t[1]);
     if (!size || !len) continue;
